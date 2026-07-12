@@ -6,6 +6,7 @@ import type {
   AudioDevice,
   TranscribeAcceleratorSetting,
   OrtAcceleratorSetting,
+  TextReplacement,
 } from "@/bindings";
 import { commands } from "@/bindings";
 
@@ -93,6 +94,8 @@ const settingUpdaters: {
   whats_new_last_seen_version: (value) =>
     commands.changeWhatsNewLastSeenVersionSetting(value as string),
   push_to_talk: (value) => commands.changePttSetting(value as boolean),
+  tap_to_toggle: (value) =>
+    commands.changeTapToToggleSetting(value as boolean),
   selected_microphone: (value) =>
     commands.setSelectedMicrophone(
       (value as string) === "Default" || value === null
@@ -119,6 +122,8 @@ const settingUpdaters: {
     commands.changeOverlayPositionSetting(value as string),
   debug_mode: (value) => commands.changeDebugModeSetting(value as boolean),
   custom_words: (value) => commands.updateCustomWords(value as string[]),
+  replacements: (value) =>
+    commands.updateReplacements(value as TextReplacement[]),
   word_correction_threshold: (value) =>
     commands.changeWordCorrectionThresholdSetting(value as number),
   paste_delay_ms: (value) =>
