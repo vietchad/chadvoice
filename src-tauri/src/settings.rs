@@ -816,9 +816,10 @@ pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 pub fn get_default_settings() -> AppSettings {
     #[cfg(target_os = "windows")]
     let default_shortcut = "ctrl+space";
-    // Aqua Voice parity: bare Option (hold = push-to-talk, tap = toggle).
+    // Aqua Voice parity: bare LEFT Option (hold = push-to-talk, tap = toggle).
+    // Side-specific so Right Option stays free for typing special characters.
     #[cfg(target_os = "macos")]
-    let default_shortcut = "option";
+    let default_shortcut = "optionleft";
     #[cfg(target_os = "linux")]
     let default_shortcut = "ctrl+space";
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
