@@ -432,6 +432,8 @@ mod tests {
         Release,
         /// The `RELEASE_GRACE` window elapsed with no cancelling press arriving.
         Grace,
+        /// Simulated wall-clock time passing (ms) with no events.
+        Wait(u64),
     }
 
     #[derive(Debug, PartialEq, Eq)]
@@ -449,34 +451,50 @@ mod tests {
 
     /// Mirror of the coordinator loop's decision logic for a single push-to-talk
     /// binding: it calls the real `classify_ptt_event` and applies the exact same
-    /// Defer / Cancel / debounce / start / stop transitions.
-    fn simulate(events: &[Ev]) -> SimResult {
+    /// Defer / Cancel / debounce / tap-latch / start / stop transitions.
+    fn simulate(events: &[Ev], tap_to_toggle: bool) -> SimResult {
         let mut stage = SimStage::Idle;
-        let mut pending: Option<String> = None;
+        let mut pending: Option<(String, u64)> = None; // (binding, deadline_ms)
         let mut last_press_ms: Option<u64> = None;
         let mut clock_ms: u64 = 0;
         let mut starts = 0u32;
         let mut stops = 0u32;
+        let mut recording_started_ms: Option<u64> = None;
+        let mut latched = false;
         let debounce_ms = DEBOUNCE.as_millis() as u64;
+        let grace_ms = RELEASE_GRACE.as_millis() as u64;
+        let tap_latch_ms = TAP_LATCH.as_millis() as u64;
 
         for ev in events {
             // Auto-repeat events arrive a few ms apart, well inside DEBOUNCE.
             clock_ms += 5;
 
             match ev {
+                Ev::Wait(ms) => {
+                    clock_ms += ms;
+                }
                 Ev::Grace => {
                     // Coordinator's `RecvTimeoutError::Timeout` arm: fire the
                     // deferred release iff we are still recording that binding.
-                    if let Some(pending_binding) = pending.take() {
+                    if let Some((pending_binding, deadline_ms)) = pending.take() {
                         if stage == SimStage::Recording && pending_binding == BINDING {
-                            stage = SimStage::Processing;
-                            stops += 1;
+                            let is_tap = tap_to_toggle
+                                && !latched
+                                && recording_started_ms.is_some_and(|t| {
+                                    deadline_ms.saturating_sub(t) < tap_latch_ms + grace_ms
+                                });
+                            if is_tap {
+                                latched = true;
+                            } else {
+                                stage = SimStage::Processing;
+                                stops += 1;
+                            }
                         }
                     }
                 }
                 Ev::Press | Ev::Release => {
                     let is_pressed = matches!(ev, Ev::Press);
-                    let pending_binding = pending.as_deref();
+                    let pending_binding = pending.as_ref().map(|(b, _)| b.as_str());
                     let recording_binding = if stage == SimStage::Recording {
                         Some(BINDING)
                     } else {
@@ -495,7 +513,7 @@ mod tests {
                             continue;
                         }
                         PttAction::DeferRelease => {
-                            pending = Some(BINDING.to_string());
+                            pending = Some((BINDING.to_string(), clock_ms + grace_ms));
                             continue;
                         }
                         PttAction::Passthrough => {}
@@ -511,7 +529,13 @@ mod tests {
                     if is_pressed && stage == SimStage::Idle {
                         stage = SimStage::Recording;
                         starts += 1;
-                    } else if !is_pressed && stage == SimStage::Recording {
+                        recording_started_ms = Some(clock_ms);
+                        latched = false;
+                    } else if is_pressed && latched && stage == SimStage::Recording {
+                        // Second press while latched hands-free: stop.
+                        stage = SimStage::Processing;
+                        stops += 1;
+                    } else if !is_pressed && !latched && stage == SimStage::Recording {
                         stage = SimStage::Processing;
                         stops += 1;
                     }
@@ -544,7 +568,7 @@ mod tests {
     /// recording stays continuously active for the whole burst.
     #[test]
     fn x11_autorepeat_burst_does_not_toggle_recording() {
-        let result = simulate(&autorepeat_burst());
+        let result = simulate(&autorepeat_burst(), false);
         assert_eq!(result.starts, 1, "recording should start exactly once");
         assert_eq!(
             result.stops, 0,
@@ -566,12 +590,82 @@ mod tests {
         let mut events = autorepeat_burst();
         events.push(Ev::Release); // genuine key-up
         events.push(Ev::Grace); // grace window elapses, no cancelling press
-        let result = simulate(&events);
+        let result = simulate(&events, false);
         assert_eq!(result.starts, 1, "recording should start exactly once");
         assert_eq!(
             result.stops, 1,
             "a genuine release should stop recording exactly once"
         );
+        assert_eq!(result.stage, SimStage::Processing);
+    }
+
+    // ---------------------------------------------------------------------
+    // Tap-to-toggle (Aqua Voice-style): a press released within TAP_LATCH
+    // latches recording hands-free; the next press stops it. Holding past
+    // TAP_LATCH behaves as plain push-to-talk.
+    // ---------------------------------------------------------------------
+
+    #[test]
+    fn tap_latches_recording_hands_free() {
+        // Press, release 100ms later (a tap), grace elapses with no re-press.
+        let events = [Ev::Press, Ev::Wait(100), Ev::Release, Ev::Grace];
+        let result = simulate(&events, true);
+        assert_eq!(result.starts, 1);
+        assert_eq!(result.stops, 0, "a tap must latch, not stop");
+        assert_eq!(result.stage, SimStage::Recording);
+    }
+
+    #[test]
+    fn press_after_tap_latch_stops_recording() {
+        let events = [
+            Ev::Press,
+            Ev::Wait(100),
+            Ev::Release,
+            Ev::Grace,
+            Ev::Wait(2000),
+            Ev::Press,
+        ];
+        let result = simulate(&events, true);
+        assert_eq!(result.starts, 1);
+        assert_eq!(result.stops, 1, "second press must stop a latched recording");
+        assert_eq!(result.stage, SimStage::Processing);
+    }
+
+    #[test]
+    fn hold_past_tap_window_stops_on_release() {
+        let events = [Ev::Press, Ev::Wait(600), Ev::Release, Ev::Grace];
+        let result = simulate(&events, true);
+        assert_eq!(result.starts, 1);
+        assert_eq!(result.stops, 1, "a long hold is plain push-to-talk");
+        assert_eq!(result.stage, SimStage::Processing);
+    }
+
+    #[test]
+    fn tap_disabled_short_press_still_stops() {
+        let events = [Ev::Press, Ev::Wait(100), Ev::Release, Ev::Grace];
+        let result = simulate(&events, false);
+        assert_eq!(result.stops, 1, "with tap_to_toggle off, any release stops");
+        assert_eq!(result.stage, SimStage::Processing);
+    }
+
+    #[test]
+    fn release_after_latched_stop_press_is_ignored() {
+        // Tap latches; later press stops; the release of that press must not
+        // start or stop anything further.
+        let events = [
+            Ev::Press,
+            Ev::Wait(100),
+            Ev::Release,
+            Ev::Grace,
+            Ev::Wait(1000),
+            Ev::Press,
+            Ev::Wait(100),
+            Ev::Release,
+            Ev::Grace,
+        ];
+        let result = simulate(&events, true);
+        assert_eq!(result.starts, 1);
+        assert_eq!(result.stops, 1);
         assert_eq!(result.stage, SimStage::Processing);
     }
 }

@@ -178,6 +178,14 @@
           "transcribe_with_post_process": {
             "name": "Post-Processing Hotkey",
             "description": "Optional: A dedicated hotkey that always applies AI post-processing to your transcription."
+          },
+          "lock": {
+            "name": "Hands-Free Lock",
+            "description": "The keyboard shortcut to latch recording hands-free; press again to stop."
+          },
+          "paste_last_transcript": {
+            "name": "Paste Last Transcript",
+            "description": "The keyboard shortcut to paste the most recent transcription again."
           }
         },
         "errors": {
@@ -196,6 +204,10 @@
       "pushToTalk": {
         "label": "Push To Talk",
         "description": "Hold to record, release to stop"
+      },
+      "tapToToggle": {
+        "label": "Tap to Toggle",
+        "description": "A quick tap of the shortcut latches recording hands-free; press again to stop"
       }
     },
     "models": {
@@ -363,6 +375,15 @@
         "add": "Add",
         "remove": "Remove {{word}}",
         "duplicate": "\"{{word}}\" already exists"
+      },
+      "replacements": {
+        "title": "Text Replacements",
+        "description": "Define find-and-replace rules applied to every transcription. Each rule replaces the exact text on the left with the text on the right.",
+        "fromPlaceholder": "Replace",
+        "toPlaceholder": "With",
+        "add": "Add",
+        "remove": "Remove {{from}}",
+        "duplicate": "A rule for \"{{from}}\" already exists"
       },
       "voiceActivityDetection": {
         "title": "Voice Activity Detection",
