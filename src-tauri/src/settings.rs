@@ -93,6 +93,14 @@ pub struct LLMPrompt {
     pub prompt: String,
 }
 
+/// A literal find→replace rule applied to every transcription after all other
+/// processing. Deterministic complement to the fuzzy custom-words correction.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
+pub struct TextReplacement {
+    pub from: String,
+    pub to: String,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Type)]
 pub struct PostProcessProvider {
     pub id: String,
@@ -349,6 +357,11 @@ pub struct AppSettings {
     pub bindings: HashMap<String, ShortcutBinding>,
     #[serde(default = "default_push_to_talk")]
     pub push_to_talk: bool,
+    /// In push-to-talk mode, a press released within the tap window latches
+    /// recording hands-free (Aqua Voice-style tap-to-toggle); pressing the
+    /// key again stops it. Holding past the window behaves as normal PTT.
+    #[serde(default = "default_tap_to_toggle")]
+    pub tap_to_toggle: bool,
     #[serde(default)]
     pub audio_feedback: bool,
     #[serde(default = "default_audio_feedback_volume")]
@@ -393,6 +406,9 @@ pub struct AppSettings {
     pub log_level: LogLevel,
     #[serde(default)]
     pub custom_words: Vec<String>,
+    /// Literal find→replace rules applied after all other text processing.
+    #[serde(default)]
+    pub replacements: Vec<TextReplacement>,
     #[serde(default)]
     pub model_unload_timeout: ModelUnloadTimeout,
     #[serde(default = "default_word_correction_threshold")]
@@ -480,6 +496,10 @@ fn default_push_to_talk() -> bool {
     true
 }
 
+fn default_tap_to_toggle() -> bool {
+    true
+}
+
 fn default_always_on_microphone() -> bool {
     false
 }
@@ -497,7 +517,8 @@ fn default_autostart_enabled() -> bool {
 }
 
 fn default_update_checks_enabled() -> bool {
-    true
+    // Fully-offline fork: never phone home for updates unless opted in.
+    false
 }
 
 fn default_show_whats_new_on_update() -> bool {
@@ -556,7 +577,8 @@ fn default_auto_submit() -> bool {
 }
 
 fn default_history_limit() -> usize {
-    5
+    // Aqua Voice keeps the last 100 transcripts.
+    100
 }
 
 fn default_recording_retention_period() -> RecordingRetentionPeriod {
@@ -576,7 +598,8 @@ fn default_theme() -> Theme {
 }
 
 fn default_post_process_enabled() -> bool {
-    false
+    // Aqua Voice applies LLM cleanup by default; ours runs on local Ollama.
+    true
 }
 
 fn default_app_language() -> String {
@@ -590,7 +613,9 @@ fn default_show_tray_icon() -> bool {
 }
 
 fn default_post_process_provider_id() -> String {
-    "openai".to_string()
+    // Default to the local Ollama endpoint (the "custom" provider) so
+    // post-processing works offline out of the box.
+    "custom".to_string()
 }
 
 fn default_post_process_providers() -> Vec<PostProcessProvider> {
@@ -696,6 +721,10 @@ fn default_model_for_provider(provider_id: &str) -> String {
     if provider_id == APPLE_INTELLIGENCE_PROVIDER_ID {
         return APPLE_INTELLIGENCE_DEFAULT_MODEL_ID.to_string();
     }
+    if provider_id == "custom" {
+        // Local Ollama default; adjust in settings if a different model is pulled.
+        return "qwen2.5:7b".to_string();
+    }
     String::new()
 }
 
@@ -787,8 +816,9 @@ pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 pub fn get_default_settings() -> AppSettings {
     #[cfg(target_os = "windows")]
     let default_shortcut = "ctrl+space";
+    // Aqua Voice parity: bare Option (hold = push-to-talk, tap = toggle).
     #[cfg(target_os = "macos")]
-    let default_shortcut = "option+space";
+    let default_shortcut = "option";
     #[cfg(target_os = "linux")]
     let default_shortcut = "ctrl+space";
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
@@ -836,10 +866,42 @@ pub fn get_default_settings() -> AppSettings {
         },
     );
 
+    #[cfg(target_os = "macos")]
+    let default_lock_shortcut = "fn+space";
+    #[cfg(not(target_os = "macos"))]
+    let default_lock_shortcut = "ctrl+alt+space";
+    bindings.insert(
+        "lock".to_string(),
+        ShortcutBinding {
+            id: "lock".to_string(),
+            name: "Hands-Free Lock".to_string(),
+            description: "Starts a hands-free recording that stays on until stopped."
+                .to_string(),
+            default_binding: default_lock_shortcut.to_string(),
+            current_binding: default_lock_shortcut.to_string(),
+        },
+    );
+
+    #[cfg(target_os = "macos")]
+    let default_paste_last_shortcut = "command+ctrl+v";
+    #[cfg(not(target_os = "macos"))]
+    let default_paste_last_shortcut = "ctrl+alt+v";
+    bindings.insert(
+        "paste_last_transcript".to_string(),
+        ShortcutBinding {
+            id: "paste_last_transcript".to_string(),
+            name: "Paste Last Transcript".to_string(),
+            description: "Pastes the most recent transcript again.".to_string(),
+            default_binding: default_paste_last_shortcut.to_string(),
+            current_binding: default_paste_last_shortcut.to_string(),
+        },
+    );
+
     AppSettings {
         settings_schema_version: default_settings_schema_version(),
         bindings,
         push_to_talk: default_push_to_talk(),
+        tap_to_toggle: default_tap_to_toggle(),
         audio_feedback: false,
         audio_feedback_volume: default_audio_feedback_volume(),
         sound_theme: default_sound_theme(),
@@ -860,6 +922,7 @@ pub fn get_default_settings() -> AppSettings {
         debug_mode: false,
         log_level: default_log_level(),
         custom_words: Vec::new(),
+        replacements: Vec::new(),
         model_unload_timeout: ModelUnloadTimeout::default(),
         word_correction_threshold: default_word_correction_threshold(),
         history_limit: default_history_limit(),

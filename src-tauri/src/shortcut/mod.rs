@@ -480,6 +480,27 @@ pub fn change_ptt_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
 
 #[tauri::command]
 #[specta::specta]
+pub fn change_tap_to_toggle_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.tap_to_toggle = enabled;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_replacements(
+    app: AppHandle,
+    replacements: Vec<settings::TextReplacement>,
+) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.replacements = replacements;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn change_audio_feedback_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
     settings.audio_feedback = enabled;

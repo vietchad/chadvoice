@@ -37,7 +37,28 @@ pub fn handle_shortcut_event(
     // Transcribe bindings are handled by the coordinator.
     if is_transcribe_binding(binding_id) {
         if let Some(coordinator) = app.try_state::<TranscriptionCoordinator>() {
-            coordinator.send_input(binding_id, hotkey_string, is_pressed, settings.push_to_talk);
+            coordinator.send_input(
+                binding_id,
+                hotkey_string,
+                is_pressed,
+                settings.push_to_talk,
+                settings.tap_to_toggle,
+            );
+        } else {
+            warn!("TranscriptionCoordinator is not initialized");
+        }
+        return;
+    }
+
+    // Hands-free lock: toggles a recording that ignores key releases. Routed
+    // to the coordinator as a toggle-mode input on the main transcribe
+    // binding so any transcribe key press can also stop it.
+    if binding_id == "lock" {
+        if !is_pressed {
+            return;
+        }
+        if let Some(coordinator) = app.try_state::<TranscriptionCoordinator>() {
+            coordinator.send_input("transcribe", hotkey_string, true, false, false);
         } else {
             warn!("TranscriptionCoordinator is not initialized");
         }
@@ -56,6 +77,14 @@ pub fn handle_shortcut_event(
     if binding_id == "cancel" {
         let audio_manager = app.state::<Arc<AudioRecordingManager>>();
         if audio_manager.is_recording() && is_pressed {
+            action.start(app, binding_id, hotkey_string);
+        }
+        return;
+    }
+
+    // Paste-last-transcript fires once per key press.
+    if binding_id == "paste_last_transcript" {
+        if is_pressed {
             action.start(app, binding_id, hotkey_string);
         }
         return;

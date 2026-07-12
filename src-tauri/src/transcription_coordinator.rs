@@ -9,6 +9,10 @@ use tauri::{AppHandle, Manager};
 
 const DEBOUNCE: Duration = Duration::from_millis(30);
 const RELEASE_GRACE: Duration = Duration::from_millis(50);
+/// A push-to-talk press released within this window is a "tap": recording
+/// latches on and continues hands-free until the key is pressed again
+/// (Aqua Voice-style tap-to-toggle on the same key as hold-to-talk).
+const TAP_LATCH: Duration = Duration::from_millis(350);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PttAction {
@@ -21,6 +25,7 @@ struct PendingRelease {
     binding_id: String,
     hotkey_string: String,
     deadline: Instant,
+    tap_to_toggle: bool,
 }
 
 /// Commands processed sequentially by the coordinator thread.
@@ -30,6 +35,7 @@ enum Command {
         hotkey_string: String,
         is_pressed: bool,
         push_to_talk: bool,
+        tap_to_toggle: bool,
     },
     Cancel {
         recording_was_active: bool,
@@ -88,6 +94,11 @@ impl TranscriptionCoordinator {
                 let mut stage = Stage::Idle;
                 let mut last_press: Option<Instant> = None;
                 let mut pending_release: Option<PendingRelease> = None;
+                // When the current recording started, and whether it is
+                // "latched" (hands-free: releases are ignored, next press
+                // stops). Set by tap-to-toggle and by toggle-mode starts.
+                let mut recording_started: Option<Instant> = None;
+                let mut latched = false;
 
                 loop {
                     let cmd = if let Some(pending) = &pending_release {
@@ -99,12 +110,31 @@ impl TranscriptionCoordinator {
                                 if let Some(pending) = pending_release.take() {
                                     if matches!(&stage, Stage::Recording(id) if id == &pending.binding_id)
                                     {
-                                        stop(
-                                            &app,
-                                            &mut stage,
-                                            &pending.binding_id,
-                                            &pending.hotkey_string,
-                                        );
+                                        // The deadline includes RELEASE_GRACE, so
+                                        // compare against TAP_LATCH + grace to
+                                        // recover the actual hold duration.
+                                        let is_tap = pending.tap_to_toggle
+                                            && !latched
+                                            && recording_started.is_some_and(|t| {
+                                                pending
+                                                    .deadline
+                                                    .saturating_duration_since(t)
+                                                    < TAP_LATCH + RELEASE_GRACE
+                                            });
+                                        if is_tap {
+                                            debug!(
+                                                "Tap detected for '{}': latching hands-free recording",
+                                                pending.binding_id
+                                            );
+                                            latched = true;
+                                        } else {
+                                            stop(
+                                                &app,
+                                                &mut stage,
+                                                &pending.binding_id,
+                                                &pending.hotkey_string,
+                                            );
+                                        }
                                     }
                                 }
                                 continue;
@@ -124,6 +154,7 @@ impl TranscriptionCoordinator {
                             hotkey_string,
                             is_pressed,
                             push_to_talk,
+                            tap_to_toggle,
                         } => {
                             let pending_release_binding = pending_release
                                 .as_ref()
@@ -149,6 +180,7 @@ impl TranscriptionCoordinator {
                                         binding_id,
                                         hotkey_string,
                                         deadline: Instant::now() + RELEASE_GRACE,
+                                        tap_to_toggle,
                                     });
                                     continue;
                                 }
@@ -169,7 +201,18 @@ impl TranscriptionCoordinator {
                             if push_to_talk {
                                 if is_pressed && matches!(stage, Stage::Idle) {
                                     start(&app, &mut stage, &binding_id, &hotkey_string);
+                                    if matches!(stage, Stage::Recording(_)) {
+                                        recording_started = Some(Instant::now());
+                                        latched = false;
+                                    }
+                                } else if is_pressed
+                                    && latched
+                                    && matches!(&stage, Stage::Recording(id) if id == &binding_id)
+                                {
+                                    // Second press while latched hands-free: stop.
+                                    stop(&app, &mut stage, &binding_id, &hotkey_string);
                                 } else if !is_pressed
+                                    && !latched
                                     && matches!(&stage, Stage::Recording(id) if id == &binding_id)
                                 {
                                     stop(&app, &mut stage, &binding_id, &hotkey_string);
@@ -178,6 +221,13 @@ impl TranscriptionCoordinator {
                                 match &stage {
                                     Stage::Idle => {
                                         start(&app, &mut stage, &binding_id, &hotkey_string);
+                                        if matches!(stage, Stage::Recording(_)) {
+                                            recording_started = Some(Instant::now());
+                                            // Toggle-mode recordings are inherently
+                                            // hands-free: a press (from any
+                                            // transcribe binding) stops them.
+                                            latched = true;
+                                        }
                                     }
                                     Stage::Recording(id) if id == &binding_id => {
                                         stop(&app, &mut stage, &binding_id, &hotkey_string);
@@ -192,6 +242,8 @@ impl TranscriptionCoordinator {
                             recording_was_active,
                         } => {
                             pending_release = None;
+                            latched = false;
+                            recording_started = None;
                             // Don't reset during processing — wait for the pipeline to finish.
                             if !matches!(stage, Stage::Processing)
                                 && (recording_was_active || matches!(stage, Stage::Recording(_)))
@@ -201,6 +253,8 @@ impl TranscriptionCoordinator {
                         }
                         Command::ProcessingFinished => {
                             stage = Stage::Idle;
+                            latched = false;
+                            recording_started = None;
                         }
                     }
                 }
@@ -222,6 +276,7 @@ impl TranscriptionCoordinator {
         hotkey_string: &str,
         is_pressed: bool,
         push_to_talk: bool,
+        tap_to_toggle: bool,
     ) {
         if self
             .tx
@@ -230,6 +285,7 @@ impl TranscriptionCoordinator {
                 hotkey_string: hotkey_string.to_string(),
                 is_pressed,
                 push_to_talk,
+                tap_to_toggle,
             })
             .is_err()
         {

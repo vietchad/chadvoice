@@ -453,6 +453,18 @@ pub(crate) async fn process_transcription_output(
         post_processed_text = Some(final_text.clone());
     }
 
+    // Literal find→replace rules run last so they always win, including over
+    // LLM cleanup output.
+    if !settings.replacements.is_empty() {
+        final_text = crate::audio_toolkit::text::apply_replacements(
+            &final_text,
+            &settings.replacements,
+        );
+        if final_text != transcription && post_processed_text.as_deref() != Some(&final_text) {
+            post_processed_text = Some(final_text.clone());
+        }
+    }
+
     ProcessedTranscription {
         final_text,
         post_processed_text,
@@ -644,7 +656,9 @@ impl ShortcutAction for TranscribeAction {
         play_feedback_sound(app, SoundType::Stop);
 
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
-        let post_process = self.post_process;
+        // Aqua Voice parity: the global post-process toggle applies cleanup to
+        // every transcription; the dedicated binding forces it regardless.
+        let post_process = self.post_process || get_settings(app).post_process_enabled;
         let cancel_generation = rm.cancel_generation();
 
         tauri::async_runtime::spawn(async move {
@@ -902,6 +916,48 @@ impl ShortcutAction for TestAction {
 }
 
 // Static Action Map
+// Paste Last Transcript Action
+struct PasteLastTranscriptAction;
+
+impl ShortcutAction for PasteLastTranscriptAction {
+    fn start(&self, app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
+        let hm = app.state::<Arc<HistoryManager>>();
+        let entry = match hm.get_latest_completed_entry() {
+            Ok(Some(entry)) => entry,
+            Ok(None) => {
+                warn!("No completed transcription history entries to paste.");
+                return;
+            }
+            Err(err) => {
+                error!("Failed to fetch last completed transcription entry: {}", err);
+                return;
+            }
+        };
+
+        let text = entry
+            .post_processed_text
+            .clone()
+            .unwrap_or(entry.transcription_text);
+        if text.trim().is_empty() {
+            warn!("Last completed transcription is empty; nothing to paste.");
+            return;
+        }
+
+        let ah = app.clone();
+        app.run_on_main_thread(move || {
+            if let Err(e) = utils::paste(text, ah.clone()) {
+                error!("Failed to paste last transcript: {}", e);
+                let _ = ah.emit("paste-error", ());
+            }
+        })
+        .unwrap_or_else(|e| error!("Failed to run paste on main thread: {:?}", e));
+    }
+
+    fn stop(&self, _app: &AppHandle, _binding_id: &str, _shortcut_str: &str) {
+        // No-op: paste fires on press.
+    }
+}
+
 pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::new(|| {
     let mut map = HashMap::new();
     map.insert(
@@ -921,6 +977,10 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
     map.insert(
         "test".to_string(),
         Arc::new(TestAction) as Arc<dyn ShortcutAction>,
+    );
+    map.insert(
+        "paste_last_transcript".to_string(),
+        Arc::new(PasteLastTranscriptAction) as Arc<dyn ShortcutAction>,
     );
     map
 });
