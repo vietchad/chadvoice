@@ -1,4 +1,7 @@
-import Foundation
+// Darwin (not Foundation) — the stub only needs strdup/free, and importing
+// Foundation trips a duplicate-SwiftBridging-modulemap bug in the macOS 26
+// Command Line Tools that fails the whole build on CLT-only machines.
+import Darwin
 
 // Stub implementation when FoundationModels is not available
 // This file is compiled via Cargo build script when the build environment
