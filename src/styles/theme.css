@@ -1,4 +1,4 @@
-/* Handy Colors */
+/* ChadVoice Colors */
 
 :root {
   /* Palette source of truth. Each themed color is defined once as a
@@ -6,16 +6,16 @@
      in App.css reference these, so a hex value lives in exactly one place. */
   --light-color-text: #0f0f0f;
   --light-color-background: #fbfbfb;
-  --light-color-logo-primary: #faa2ca;
-  --light-color-logo-stroke: #382731;
+  --light-color-logo-primary: #faa2a2;
+  --light-color-logo-stroke: #382727;
 
   --dark-color-text: #fbfbfb;
   --dark-color-background: #2c2b29;
-  --dark-color-logo-primary: #f28cbb;
-  --dark-color-logo-stroke: #fad1ed;
+  --dark-color-logo-primary: #f28c8c;
+  --dark-color-logo-stroke: #fad1d1;
 
   /* Tokens that do not change between light and dark */
-  --color-background-ui: #da5893;
+  --color-background-ui: #da5858;
   --color-text-stroke: #f6f6f6;
   --color-mid-gray: #808080;
 

@@ -1,10 +1,31 @@
-# Handy
+# ChadVoice
 
-[![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com/invite/WVBeWsNXK4)
+**Fully local voice dictation with Aqua Voice-style ergonomics. Free, open source, offline.**
 
-**A free, open source, and extensible speech-to-text application that works completely offline.**
+ChadVoice is a fork of [Handy](https://github.com/cjpais/Handy) by CJ Pais (MIT) that adds:
 
-Handy is a cross-platform desktop application that provides simple, privacy-focused speech transcription. Press a shortcut, speak, and have your words appear in any text field. This happens on your own computer without sending any information to the cloud.
+- **Hold or tap the same key**: hold Left Option for push-to-talk, or tap it to latch hands-free recording (tap again to stop)
+- **Hands-free lock** on Fn+Space, **Esc** to cancel, **Cmd+Ctrl+V** to re-paste the last transcript
+- **AI cleanup by default via local Ollama** (filler-word removal, self-corrections, punctuation) — no cloud, no API key
+- **Find→replace rules** applied to every transcript, plus the personal dictionary
+- **No phone-home**: the auto-updater is removed; the only network use is the one-time model download and your localhost LLM
+
+Press a shortcut, speak, and your words appear in any text field — entirely on your own computer.
+
+## Installing
+
+Grab the latest DMG (macOS, Apple Silicon or Intel) or installer (Windows x64/ARM64) from [Releases](https://github.com/vietchad/chadvoice/releases).
+
+Builds are unsigned community builds:
+
+- **macOS**: right-click the app → Open (or run `xattr -cr /Applications/ChadVoice.app`) the first time
+- **Windows**: click "More info" → "Run anyway" if SmartScreen appears
+
+For the optional AI cleanup, install [Ollama](https://ollama.com) and run `ollama pull qwen2.5:7b` (configurable in Settings → Post-Processing; toggle it off for raw transcription).
+
+---
+
+## About the upstream project (Handy)
 
 ## Why Handy?
 
