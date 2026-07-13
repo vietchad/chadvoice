@@ -1,6 +1,6 @@
-// ChadVoice waveform mark. Keeps the original component name and viewBox so
-// call sites are unchanged; inherits text color via fill-text like the old
-// hand mark did.
+// ChadVoice chiseled waveform mark (matches the app icon). Keeps the original
+// component name and viewBox so call sites are unchanged; inherits text color
+// via fill-text like the old hand mark did.
 const HandyHand = ({
   width,
   height,
@@ -15,10 +15,11 @@ const HandyHand = ({
     className="fill-text"
     xmlns="http://www.w3.org/2000/svg"
   >
-    <rect x="14" y="51" width="14" height="33" rx="7" />
-    <rect x="41" y="34" width="14" height="67" rx="7" />
-    <rect x="68" y="19" width="14" height="97" rx="7" />
-    <rect x="95" y="43" width="14" height="49" rx="7" />
+    <polygon points="7,53.5 23,47.5 23,81.5 7,87.5" />
+    <polygon points="31,39.5 47,33.5 47,95.5 31,101.5" />
+    <polygon points="55,23.5 71,17.5 71,111.5 55,117.5" />
+    <polygon points="79,34.5 95,28.5 95,100.5 79,106.5" />
+    <polygon points="103,49.5 119,43.5 119,85.5 103,91.5" />
   </svg>
 );
 

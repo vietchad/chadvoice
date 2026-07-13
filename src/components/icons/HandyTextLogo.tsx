@@ -28,15 +28,15 @@ const HandyTextLogo = ({
         dominantBaseline="central"
         className="logo-primary"
         style={{
-          font: "800 172px system-ui, -apple-system, 'Segoe UI', sans-serif",
-          letterSpacing: "-0.02em",
+          font: "italic 900 150px system-ui, -apple-system, 'Segoe UI', sans-serif",
+          letterSpacing: "-0.03em",
           paintOrder: "stroke",
           stroke: "var(--color-logo-stroke)",
           strokeWidth: 10,
-          strokeLinejoin: "round",
+          strokeLinejoin: "miter",
         }}
       >
-        ChadVoice
+        CHADVOICE
       </text>
     </svg>
   );
