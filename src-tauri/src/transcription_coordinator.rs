@@ -36,6 +36,10 @@ enum Command {
         is_pressed: bool,
         push_to_talk: bool,
         tap_to_toggle: bool,
+        /// Another key was pressed while the hotkey was held — the event is
+        /// part of an app-switch chord (Option+Tab / Cmd+Tab), not a
+        /// deliberate tap of the transcribe key.
+        chord: bool,
     },
     Cancel {
         recording_was_active: bool,
@@ -155,6 +159,7 @@ impl TranscriptionCoordinator {
                             is_pressed,
                             push_to_talk,
                             tap_to_toggle,
+                            chord,
                         } => {
                             let pending_release_binding = pending_release
                                 .as_ref()
@@ -163,6 +168,21 @@ impl TranscriptionCoordinator {
                                 Stage::Recording(id) => Some(id.as_str()),
                                 _ => None,
                             };
+
+                            // Chord release during a latched (hands-free)
+                            // recording: the key event was part of an
+                            // app-switch chord, not a deliberate stop tap.
+                            // Keep recording.
+                            if !is_pressed
+                                && chord
+                                && latched
+                                && recording_binding == Some(binding_id.as_str())
+                            {
+                                debug!(
+                                    "Ignoring chord release for '{binding_id}': keeping latched recording"
+                                );
+                                continue;
+                            }
 
                             match classify_ptt_event(
                                 pending_release_binding,
@@ -209,8 +229,16 @@ impl TranscriptionCoordinator {
                                     && latched
                                     && matches!(&stage, Stage::Recording(id) if id == &binding_id)
                                 {
-                                    // Second press while latched hands-free: stop.
-                                    stop(&app, &mut stage, &binding_id, &hotkey_string);
+                                    // Second press while latched hands-free: the
+                                    // stop happens on the matching release, so a
+                                    // press that turns out to be an app-switch
+                                    // chord (Option+Tab) doesn't kill the
+                                    // recording. The release is either a clean
+                                    // tap (deferred below, stops via the timeout
+                                    // path) or a chord (ignored above).
+                                    debug!(
+                                        "Press while latched for '{binding_id}': awaiting clean release to stop"
+                                    );
                                 } else if !is_pressed
                                     && !latched
                                     && matches!(&stage, Stage::Recording(id) if id == &binding_id)
@@ -277,6 +305,7 @@ impl TranscriptionCoordinator {
         is_pressed: bool,
         push_to_talk: bool,
         tap_to_toggle: bool,
+        chord: bool,
     ) {
         if self
             .tx
@@ -286,6 +315,7 @@ impl TranscriptionCoordinator {
                 is_pressed,
                 push_to_talk,
                 tap_to_toggle,
+                chord,
             })
             .is_err()
         {

@@ -27,7 +27,7 @@
 //! polled from a dedicated recording thread. Events are emitted to the frontend
 //! via Tauri's event system.
 
-use handy_keys::{Hotkey, HotkeyId, HotkeyManager, HotkeyState, KeyboardListener};
+use handy_keys::{Hotkey, HotkeyId, HotkeyManager, HotkeyState, KeyboardListener, Modifiers};
 use log::{debug, error, info};
 use serde::Serialize;
 use specta::Type;
@@ -119,11 +119,85 @@ impl HandyKeysState {
             }
         };
 
+        // Raw listener used to tell app-switch chords (Option+Tab, Cmd+Tab with
+        // the hotkey modifier held) apart from genuine taps/releases of a
+        // modifier-only hotkey. Optional: without it behavior degrades to the
+        // old chord-unaware handling.
+        let raw_listener = match KeyboardListener::new() {
+            Ok(l) => Some(l),
+            Err(e) => {
+                error!("Failed to create raw chord listener: {} (alt-tab during recording may stop it)", e);
+                None
+            }
+        };
+
         // Maps binding IDs to HotkeyIds and hotkey strings
         let mut binding_to_hotkey: HashMap<String, HotkeyId> = HashMap::new();
         let mut hotkey_to_binding: HashMap<HotkeyId, (String, String)> = HashMap::new(); // (binding_id, hotkey_string)
 
+        // Chord tracking for currently-pressed hotkeys.
+        struct HeldHotkey {
+            binding_id: String,
+            hotkey_string: String,
+            hotkey: Hotkey,
+            /// Another key/modifier was pressed while this hotkey was held.
+            chord: bool,
+            /// The HotkeyManager reported a release while the hotkey's
+            /// modifiers were still physically down (chord break, e.g. Cmd
+            /// pressed while holding Option). The release is withheld until
+            /// the modifiers are physically released.
+            suppressed_release: bool,
+        }
+        let mut held: HashMap<HotkeyId, HeldHotkey> = HashMap::new();
+        // Latest physically-held modifier state seen by the raw listener.
+        let mut last_raw_mods = Modifiers::empty();
+
         loop {
+            // Drain raw key events first so chord state is current when the
+            // corresponding hotkey events are processed below.
+            if let Some(listener) = &raw_listener {
+                while let Some(raw) = listener.try_recv() {
+                    last_raw_mods = raw.modifiers;
+                    if raw.is_key_down {
+                        for entry in held.values_mut() {
+                            let other_key =
+                                raw.key.is_some() && raw.key != entry.hotkey.key;
+                            let extra_modifier = raw.key.is_none()
+                                && !entry.hotkey.modifiers.matches(raw.modifiers);
+                            if other_key || extra_modifier {
+                                entry.chord = true;
+                            }
+                        }
+                    } else {
+                        // Physical release of a chord-broken hotkey: deliver the
+                        // withheld release now.
+                        let released: Vec<HotkeyId> = held
+                            .iter()
+                            .filter(|(_, e)| {
+                                e.suppressed_release
+                                    && !raw.modifiers.intersects(e.hotkey.modifiers)
+                            })
+                            .map(|(&id, _)| id)
+                            .collect();
+                        for id in released {
+                            if let Some(entry) = held.remove(&id) {
+                                debug!(
+                                    "handy-keys deferred release: binding={}, chord={}",
+                                    entry.binding_id, entry.chord
+                                );
+                                handle_shortcut_event(
+                                    &app,
+                                    &entry.binding_id,
+                                    &entry.hotkey_string,
+                                    false,
+                                    entry.chord,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
             // Check for hotkey events (non-blocking)
             while let Some(event) = manager.try_recv() {
                 if let Some((binding_id, hotkey_string)) = hotkey_to_binding.get(&event.id) {
@@ -132,7 +206,41 @@ impl HandyKeysState {
                         binding_id, hotkey_string, event.state
                     );
                     let is_pressed = event.state == HotkeyState::Pressed;
-                    handle_shortcut_event(&app, binding_id, hotkey_string, is_pressed);
+                    if is_pressed {
+                        if let Ok(hotkey) = hotkey_string.parse::<Hotkey>() {
+                            held.insert(
+                                event.id,
+                                HeldHotkey {
+                                    binding_id: binding_id.clone(),
+                                    hotkey_string: hotkey_string.clone(),
+                                    hotkey,
+                                    chord: false,
+                                    suppressed_release: false,
+                                },
+                            );
+                        }
+                        handle_shortcut_event(&app, binding_id, hotkey_string, true, false);
+                    } else {
+                        let chord = match held.get_mut(&event.id) {
+                            Some(entry) => {
+                                // Modifier-only hotkey "released" while its
+                                // modifiers are still physically held: the
+                                // release was caused by another modifier
+                                // joining (e.g. Cmd+Tab while holding Option).
+                                // Withhold it until the physical release.
+                                let physically_held = raw_listener.is_some()
+                                    && entry.hotkey.key.is_none()
+                                    && last_raw_mods.intersects(entry.hotkey.modifiers);
+                                if physically_held {
+                                    entry.suppressed_release = true;
+                                    continue;
+                                }
+                                held.remove(&event.id).map(|e| e.chord).unwrap_or(false)
+                            }
+                            None => false,
+                        };
+                        handle_shortcut_event(&app, binding_id, hotkey_string, false, chord);
+                    }
                 }
             }
 
