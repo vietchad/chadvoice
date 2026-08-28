@@ -178,6 +178,14 @@
           "transcribe_with_post_process": {
             "name": "पोस्ट-प्रोसेसिङ हटकी",
             "description": "वैकल्पिक: तपाईंको ट्रान्सक्रिप्सनमा सधैँ AI पोस्ट-प्रोसेसिङ लागू गर्ने छुट्टै हटकी।"
+          },
+          "lock": {
+            "name": "Hands-Free Lock",
+            "description": "The keyboard shortcut to latch recording hands-free; press again to stop."
+          },
+          "paste_last_transcript": {
+            "name": "Paste Last Transcript",
+            "description": "The keyboard shortcut to paste the most recent transcription again."
           }
         },
         "errors": {
@@ -196,6 +204,10 @@
       "pushToTalk": {
         "label": "पुश टु टक",
         "description": "रेकर्ड गर्न थिचिराख्नुहोस्, रोक्न छोड्नुहोस्"
+      },
+      "tapToToggle": {
+        "label": "Tap to Toggle",
+        "description": "A quick tap of the shortcut latches recording hands-free; press again to stop"
       }
     },
     "models": {
@@ -367,6 +379,15 @@
       "voiceActivityDetection": {
         "title": "भ्वाइस एक्टिभिटी डिटेक्सन",
         "description": "रेकर्डिङबाट मौनता हटाउँछ। स्ट्रिमिङ-सक्षम मोडेलहरूले लामो VAD टेल प्रयोग गर्छन्; VAD अफ गर्दा कच्चा अडियो रेकर्ड हुन्छ।"
+      },
+      "replacements": {
+        "title": "Text Replacements",
+        "description": "Define find-and-replace rules applied to every transcription. Each rule replaces the exact text on the left with the text on the right.",
+        "fromPlaceholder": "Replace",
+        "toPlaceholder": "With",
+        "add": "Add",
+        "remove": "Remove {{from}}",
+        "duplicate": "A rule for \"{{from}}\" already exists"
       }
     },
     "postProcessing": {

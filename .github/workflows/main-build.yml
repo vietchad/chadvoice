@@ -48,5 +48,7 @@ jobs:
       target: ${{ matrix.target }}
       build-args: ${{ matrix.args }}
       upload-artifacts: true
-      sign-binaries: true
+      # Unsigned community build: no Apple/Windows signing secrets are
+      # configured on this fork, so signing would fail the macOS jobs.
+      sign-binaries: false
     secrets: inherit

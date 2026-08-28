@@ -178,6 +178,14 @@
           "transcribe_with_post_process": {
             "name": "후처리 단축키",
             "description": "선택 사항: 항상 AI 후처리를 적용하는 전용 단축키입니다."
+          },
+          "lock": {
+            "name": "Hands-Free Lock",
+            "description": "The keyboard shortcut to latch recording hands-free; press again to stop."
+          },
+          "paste_last_transcript": {
+            "name": "Paste Last Transcript",
+            "description": "The keyboard shortcut to paste the most recent transcription again."
           }
         },
         "errors": {
@@ -196,6 +204,10 @@
       "pushToTalk": {
         "label": "녹음 중 단축키 홀딩",
         "description": "누르고 있으면 녹음, 놓으면 정지"
+      },
+      "tapToToggle": {
+        "label": "Tap to Toggle",
+        "description": "A quick tap of the shortcut latches recording hands-free; press again to stop"
       }
     },
     "sound": {
@@ -367,6 +379,15 @@
       "voiceActivityDetection": {
         "title": "Voice Activity Detection",
         "description": "Filter silence from recordings. Streaming-capable models use a longer VAD tail; disabling VAD records raw audio."
+      },
+      "replacements": {
+        "title": "Text Replacements",
+        "description": "Define find-and-replace rules applied to every transcription. Each rule replaces the exact text on the left with the text on the right.",
+        "fromPlaceholder": "Replace",
+        "toPlaceholder": "With",
+        "add": "Add",
+        "remove": "Remove {{from}}",
+        "duplicate": "A rule for \"{{from}}\" already exists"
       }
     },
     "postProcessing": {
