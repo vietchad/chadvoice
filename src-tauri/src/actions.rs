@@ -456,10 +456,8 @@ pub(crate) async fn process_transcription_output(
     // Literal find→replace rules run last so they always win, including over
     // LLM cleanup output.
     if !settings.replacements.is_empty() {
-        final_text = crate::audio_toolkit::text::apply_replacements(
-            &final_text,
-            &settings.replacements,
-        );
+        final_text =
+            crate::audio_toolkit::text::apply_replacements(&final_text, &settings.replacements);
         if final_text != transcription && post_processed_text.as_deref() != Some(&final_text) {
             post_processed_text = Some(final_text.clone());
         }
@@ -656,8 +654,8 @@ impl ShortcutAction for TranscribeAction {
         play_feedback_sound(app, SoundType::Stop);
 
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
-        // Aqua Voice parity: the global post-process toggle applies cleanup to
-        // every transcription; the dedicated binding forces it regardless.
+                                                 // Aqua Voice parity: the global post-process toggle applies cleanup to
+                                                 // every transcription; the dedicated binding forces it regardless.
         let post_process = self.post_process || get_settings(app).post_process_enabled;
         let cancel_generation = rm.cancel_generation();
 
@@ -929,7 +927,10 @@ impl ShortcutAction for PasteLastTranscriptAction {
                 return;
             }
             Err(err) => {
-                error!("Failed to fetch last completed transcription entry: {}", err);
+                error!(
+                    "Failed to fetch last completed transcription entry: {}",
+                    err
+                );
                 return;
             }
         };

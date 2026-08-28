@@ -352,10 +352,7 @@ pub fn filter_transcription_output(
 
 /// Apply literal find→replace rules in order. Case-sensitive, plain-string
 /// matching; later rules see the output of earlier ones.
-pub fn apply_replacements(
-    text: &str,
-    replacements: &[crate::settings::TextReplacement],
-) -> String {
+pub fn apply_replacements(text: &str, replacements: &[crate::settings::TextReplacement]) -> String {
     let mut result = text.to_string();
     for rule in replacements {
         if rule.from.is_empty() {

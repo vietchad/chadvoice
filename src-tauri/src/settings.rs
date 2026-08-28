@@ -880,8 +880,7 @@ pub fn get_default_settings() -> AppSettings {
         ShortcutBinding {
             id: "lock".to_string(),
             name: "Hands-Free Lock".to_string(),
-            description: "Starts a hands-free recording that stays on until stopped."
-                .to_string(),
+            description: "Starts a hands-free recording that stays on until stopped.".to_string(),
             default_binding: default_lock_shortcut.to_string(),
             current_binding: default_lock_shortcut.to_string(),
         },

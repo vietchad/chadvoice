@@ -120,9 +120,7 @@ impl TranscriptionCoordinator {
                                         let is_tap = pending.tap_to_toggle
                                             && !latched
                                             && recording_started.is_some_and(|t| {
-                                                pending
-                                                    .deadline
-                                                    .saturating_duration_since(t)
+                                                pending.deadline.saturating_duration_since(t)
                                                     < TAP_LATCH + RELEASE_GRACE
                                             });
                                         if is_tap {
@@ -657,7 +655,10 @@ mod tests {
         ];
         let result = simulate(&events, true);
         assert_eq!(result.starts, 1);
-        assert_eq!(result.stops, 1, "second press must stop a latched recording");
+        assert_eq!(
+            result.stops, 1,
+            "second press must stop a latched recording"
+        );
         assert_eq!(result.stage, SimStage::Processing);
     }
 

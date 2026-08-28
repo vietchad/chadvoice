@@ -160,10 +160,9 @@ impl HandyKeysState {
                     last_raw_mods = raw.modifiers;
                     if raw.is_key_down {
                         for entry in held.values_mut() {
-                            let other_key =
-                                raw.key.is_some() && raw.key != entry.hotkey.key;
-                            let extra_modifier = raw.key.is_none()
-                                && !entry.hotkey.modifiers.matches(raw.modifiers);
+                            let other_key = raw.key.is_some() && raw.key != entry.hotkey.key;
+                            let extra_modifier =
+                                raw.key.is_none() && !entry.hotkey.modifiers.matches(raw.modifiers);
                             if other_key || extra_modifier {
                                 entry.chord = true;
                             }
